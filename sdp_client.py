@@ -1,11 +1,11 @@
 """
-ServiceDesk Plus API Client - v3 API (Cloud Version)
-Compatible with ServiceDesk Plus Cloud API v3
-Reference: https://www.manageengine.com/products/service-desk/sdpop-v3-api/
+ServiceDesk Plus API Client - v3 API (Supports both Cloud and On-Premise)
+Reference: 
+- Cloud: https://www.manageengine.com/products/service-desk/sdpop-v3-api/
+- On-Premise: https://www.manageengine.com/products/service-desk/sdpod-v3-api/
 """
 
 import aiohttp
-import asyncio
 import json
 from urllib.parse import urlencode
 from typing import Dict, Any, List, Optional
@@ -13,13 +13,22 @@ from config import Config
 
 
 class ServiceDeskPlusClient:
-    """Client for interacting with ServiceDesk Plus Cloud API v3"""
+    """Client for interacting with ServiceDesk Plus API v3
     
-    def __init__(self):
+    Supports both Cloud and On-Premise versions with appropriate authentication.
+    """
+    
+    def __init__(self, api_type: str = "cloud"):
+        """Initialize the client
+        
+        Args:
+            api_type: "cloud" for Cloud API, "onpremise" for On-Premise API
+        """
         self.base_url = Config.SDP_BASE_URL.rstrip('/')
         self.api_key = Config.SDP_API_KEY
         self.session: Optional[aiohttp.ClientSession] = None
         self._auth_valid = False
+        self.api_type = api_type
         
     async def __aenter__(self):
         await self.authenticate()
@@ -34,7 +43,7 @@ class ServiceDeskPlusClient:
             self.session = None
             
     async def authenticate(self) -> bool:
-        """Authenticate with ServiceDesk Plus using API Key"""
+        """Authenticate with ServiceDesk Plus"""
         if not self.session:
             timeout = aiohttp.ClientTimeout(total=Config.REQUEST_TIMEOUT)
             self.session = aiohttp.ClientSession(timeout=timeout)
@@ -64,12 +73,18 @@ class ServiceDeskPlusClient:
             return False
     
     def _get_headers(self) -> Dict[str, str]:
-        """Get headers for API v3 requests"""
-        return {
+        """Get headers for API v3 requests based on API type"""
+        base_headers = {
             "Accept": "application/vnd.manageengine.sdp.v3+json",
-            "Content-Type": "application/x-www-form-urlencoded",
-            "authtoken": self.api_key
+            "Content-Type": "application/x-www-form-urlencoded"
         }
+        
+        if self.api_type == "onpremise":
+            base_headers["Authorization"] = f"Zoho-oauthtoken {self.api_key}"
+        else:
+            base_headers["authtoken"] = self.api_key
+            
+        return base_headers
             
     def _prepare_input_data(self, data: Optional[Dict[str, Any]] = None) -> str:
         """Prepare input_data for API v3"""
@@ -122,7 +137,7 @@ class ServiceDeskPlusClient:
         sort_field: str = "created_time",
         sort_order: str = "desc"
     ) -> Dict[str, Any]:
-        """Get list of requests with optional filtering and sorting"""
+        """Get list of requests with optional filtering"""
         input_data = {
             "list_info": {
                 "row_count": min(limit, Config.MAX_LIMIT),
@@ -175,16 +190,14 @@ class ServiceDeskPlusClient:
         self,
         request_id: str,
         closure_code: str,
-        closure_comments: Optional[str] = None,
-        requester_ack_resolution: bool = True
+        closure_comments: Optional[str] = None
     ) -> Dict[str, Any]:
         """Close a request"""
         closure_data = {
             "request": {
                 "closure_info": {
                     "closure_code": {"name": closure_code},
-                    "closure_comments": closure_comments or "",
-                    "requester_ack_resolution": requester_ack_resolution
+                    "closure_comments": closure_comments or ""
                 }
             }
         }
@@ -236,13 +249,6 @@ class ServiceDeskPlusClient:
             data=resolution_data
         )
         
-    async def get_request_summary(self, request_id: str) -> Dict[str, Any]:
-        """Get request summary"""
-        return await self._make_request(
-            "GET",
-            f"{Config.API_ENDPOINTS['requests']}/{request_id}/summary"
-        )
-        
     async def get_request_filters(self) -> Dict[str, Any]:
         """Get all available request filters"""
         return await self._make_request(
@@ -252,7 +258,12 @@ class ServiceDeskPlusClient:
 
     # ==================== REQUEST NOTES ====================
     
-    async def add_request_note(self, request_id: str, text: str, show_to_requester: bool = False) -> Dict[str, Any]:
+    async def add_request_note(
+        self, 
+        request_id: str, 
+        text: str, 
+        show_to_requester: bool = False
+    ) -> Dict[str, Any]:
         """Add a note to a request"""
         note_data = {
             "note": {
@@ -291,43 +302,31 @@ class ServiceDeskPlusClient:
             data=wrapper
         )
 
-    # ==================== DRAFT MANAGEMENT ====================
+    # ==================== REQUEST WORKLOGS (On-Premise only) ====================
     
-    async def get_drafts(self, limit: int = 20) -> Dict[str, Any]:
-        """Get draft requests"""
-        input_data = {"list_info": {"row_count": min(limit, Config.MAX_LIMIT), "start_index": 1}}
-        return await self._make_request("GET", Config.API_ENDPOINTS["drafts"], data=input_data)
-        
-    async def create_draft(self, draft_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Create a draft request"""
-        wrapper = {"request": draft_data}
-        return await self._make_request("POST", Config.API_ENDPOINTS["drafts"], data=wrapper)
-
-    # ==================== ARCHIVE MANAGEMENT ====================
-    
-    async def get_archived_requests(
-        self,
-        limit: int = 20,
-        search_criteria: Optional[List[Dict]] = None
-    ) -> Dict[str, Any]:
-        """Get archived requests"""
-        input_data = {"list_info": {"row_count": min(limit, Config.MAX_LIMIT), "start_index": 1}}
-        if search_criteria:
-            input_data["list_info"]["search_criteria"] = search_criteria
-        return await self._make_request("GET", Config.API_ENDPOINTS["archive"], data=input_data)
-        
-    async def restore_request(self, request_id: str) -> Dict[str, Any]:
-        """Restore a request from trash"""
+    async def get_request_worklogs(self, request_id: str) -> Dict[str, Any]:
+        """Get worklogs for a request (On-Premise API)"""
         return await self._make_request(
-            "PUT",
-            f"{Config.API_ENDPOINTS['archive']}/{request_id}/restore"
+            "GET",
+            f"{Config.API_ENDPOINTS['request_worklogs'].format(request_id=request_id)}"
         )
         
-    async def permanent_delete_request(self, request_id: str) -> Dict[str, Any]:
-        """Permanently delete a request from trash"""
+    async def add_request_worklog(
+        self,
+        request_id: str,
+        description: str,
+        hours: Optional[float] = None
+    ) -> Dict[str, Any]:
+        """Add worklog to a request (On-Premise API)"""
+        worklog_data = {"description": description}
+        if hours:
+            worklog_data["hours"] = hours
+            
+        wrapper = {"request_worklog": worklog_data}
         return await self._make_request(
-            "DELETE",
-            f"{Config.API_ENDPOINTS['archive']}/{request_id}"
+            "POST",
+            f"{Config.API_ENDPOINTS['request_worklogs'].format(request_id=request_id)}",
+            data=wrapper
         )
 
     # ==================== USER MANAGEMENT (Admin) ====================
@@ -352,11 +351,8 @@ class ServiceDeskPlusClient:
         
     async def create_user(self, user_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new user"""
-        required_fields = ["name", "email_id"]
-        for field in required_fields:
-            if field not in user_data:
-                raise ValueError(f"Required field '{field}' is missing")
-                
+        if "name" not in user_data or "email_id" not in user_data:
+            raise ValueError("Required fields 'name' and 'email_id' are missing")
         wrapper = {"user": user_data}
         return await self._make_request("POST", Config.API_ENDPOINTS["users"], data=wrapper)
         
@@ -414,28 +410,33 @@ class ServiceDeskPlusClient:
             f"{Config.API_ENDPOINTS['changes']}/{change_id}",
             data=wrapper
         )
+
+    # ==================== PROBLEM MANAGEMENT (On-Premise only) ====================
+    
+    async def get_problems(
+        self,
+        limit: int = 20,
+        search_criteria: Optional[List[Dict]] = None
+    ) -> Dict[str, Any]:
+        """Get list of problems (On-Premise API)"""
+        input_data = {"list_info": {"row_count": min(limit, Config.MAX_LIMIT), "start_index": 1}}
+        if search_criteria:
+            input_data["list_info"]["search_criteria"] = search_criteria
+        return await self._make_request("GET", Config.API_ENDPOINTS["problems"], data=input_data)
         
-    async def approve_change(self, change_id: str, approval_data: Optional[Dict] = None) -> Dict[str, Any]:
-        """Approve a change"""
-        data = {"change_approval": approval_data or {}}
+    async def get_problem(self, problem_id: str) -> Dict[str, Any]:
+        """Get specific problem details"""
         return await self._make_request(
-            "PUT",
-            f"{Config.API_ENDPOINTS['changes']}/{change_id}/approve",
-            data=data
+            "GET",
+            f"{Config.API_ENDPOINTS['problems']}/{problem_id}"
         )
         
-    async def reject_change(self, change_id: str, rejection_reason: str) -> Dict[str, Any]:
-        """Reject a change"""
-        data = {
-            "change_approval": {
-                "comments": rejection_reason
-            }
-        }
-        return await self._make_request(
-            "PUT",
-            f"{Config.API_ENDPOINTS['changes']}/{change_id}/reject",
-            data=data
-        )
+    async def create_problem(self, problem_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new problem"""
+        if "subject" not in problem_data:
+            raise ValueError("Required field 'subject' is missing")
+        wrapper = {"problem": problem_data}
+        return await self._make_request("POST", Config.API_ENDPOINTS["problems"], data=wrapper)
 
     # ==================== PROJECT MANAGEMENT ====================
     
@@ -538,22 +539,6 @@ class ServiceDeskPlusClient:
             f"{Config.API_ENDPOINTS['releases']}/{release_id}",
             data=wrapper
         )
-        
-    async def approve_release(self, release_id: str) -> Dict[str, Any]:
-        """Approve a release"""
-        return await self._make_request(
-            "PUT",
-            f"{Config.API_ENDPOINTS['releases']}/{release_id}/approve"
-        )
-        
-    async def reject_release(self, release_id: str, rejection_reason: str) -> Dict[str, Any]:
-        """Reject a release"""
-        data = {"release_approval": {"comments": rejection_reason}}
-        return await self._make_request(
-            "PUT",
-            f"{Config.API_ENDPOINTS['releases']}/{release_id}/reject",
-            data=data
-        )
 
     # ==================== TASK MANAGEMENT ====================
     
@@ -597,3 +582,212 @@ class ServiceDeskPlusClient:
             "DELETE",
             f"{Config.API_ENDPOINTS['tasks']}/{task_id}"
         )
+
+    # ==================== ASSET MANAGEMENT (On-Premise only) ====================
+    
+    async def get_assets(
+        self,
+        limit: int = 20,
+        search_criteria: Optional[List[Dict]] = None
+    ) -> Dict[str, Any]:
+        """Get list of assets (On-Premise API)"""
+        input_data = {"list_info": {"row_count": min(limit, Config.MAX_LIMIT), "start_index": 1}}
+        if search_criteria:
+            input_data["list_info"]["search_criteria"] = search_criteria
+        return await self._make_request("GET", Config.API_ENDPOINTS["assets"], data=input_data)
+        
+    async def get_asset(self, asset_id: str) -> Dict[str, Any]:
+        """Get specific asset details"""
+        return await self._make_request(
+            "GET",
+            f"{Config.API_ENDPOINTS['assets']}/{asset_id}"
+        )
+        
+    async def create_asset(self, asset_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new asset (name and product are required)"""
+        if "name" not in asset_data:
+            raise ValueError("Required field 'name' is missing")
+        wrapper = {"asset": asset_data}
+        return await self._make_request("POST", Config.API_ENDPOINTS["assets"], data=wrapper)
+        
+    async def update_asset(self, asset_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update an existing asset"""
+        wrapper = {"asset": update_data}
+        return await self._make_request(
+            "PUT",
+            f"{Config.API_ENDPOINTS['assets']}/{asset_id}",
+            data=wrapper
+        )
+        
+    async def delete_asset(self, asset_id: str) -> Dict[str, Any]:
+        """Delete an asset"""
+        return await self._make_request(
+            "DELETE",
+            f"{Config.API_ENDPOINTS['assets']}/{asset_id}"
+        )
+
+    # ==================== CONTRACT MANAGEMENT (On-Premise only) ====================
+    
+    async def get_contracts(
+        self,
+        limit: int = 20,
+        search_criteria: Optional[List[Dict]] = None
+    ) -> Dict[str, Any]:
+        """Get list of contracts (On-Premise API)"""
+        input_data = {"list_info": {"row_count": min(limit, Config.MAX_LIMIT), "start_index": 1}}
+        if search_criteria:
+            input_data["list_info"]["search_criteria"] = search_criteria
+        return await self._make_request("GET", Config.API_ENDPOINTS["contracts"], data=input_data)
+        
+    async def get_contract(self, contract_id: str) -> Dict[str, Any]:
+        """Get specific contract details"""
+        return await self._make_request(
+            "GET",
+            f"{Config.API_ENDPOINTS['contracts']}/{contract_id}"
+        )
+        
+    async def create_contract(self, contract_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new contract"""
+        if "name" not in contract_data:
+            raise ValueError("Required field 'name' is missing")
+        wrapper = {"contract": contract_data}
+        return await self._make_request("POST", Config.API_ENDPOINTS["contracts"], data=wrapper)
+
+    # ==================== PURCHASE ORDER MANAGEMENT (On-Premise only) ====================
+    
+    async def get_purchase_orders(
+        self,
+        limit: int = 20,
+        search_criteria: Optional[List[Dict]] = None
+    ) -> Dict[str, Any]:
+        """Get list of purchase orders (On-Premise API)"""
+        input_data = {"list_info": {"row_count": min(limit, Config.MAX_LIMIT), "start_index": 1}}
+        if search_criteria:
+            input_data["list_info"]["search_criteria"] = search_criteria
+        return await self._make_request("GET", Config.API_ENDPOINTS["purchase_orders"], data=input_data)
+        
+    async def get_purchase_order(self, po_id: str) -> Dict[str, Any]:
+        """Get specific purchase order details"""
+        return await self._make_request(
+            "GET",
+            f"{Config.API_ENDPOINTS['purchase_orders']}/{po_id}"
+        )
+        
+    async def create_purchase_order(self, po_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new purchase order"""
+        wrapper = {"purchase_order": po_data}
+        return await self._make_request("POST", Config.API_ENDPOINTS["purchase_orders"], data=wrapper)
+
+    # ==================== CMDB MANAGEMENT (On-Premise only) ====================
+    
+    async def get_ci_types(self) -> Dict[str, Any]:
+        """Get list of CI types (On-Premise API)"""
+        return await self._make_request("GET", Config.API_ENDPOINTS["ci_types"])
+        
+    async def get_configuration_items(
+        self,
+        ci_type_api_name: str,
+        limit: int = 20
+    ) -> Dict[str, Any]:
+        """Get list of CIs for a specific CI type"""
+        input_data = {"list_info": {"row_count": min(limit, Config.MAX_LIMIT), "start_index": 1}}
+        endpoint = f"{Config.API_ENDPOINTS['cmdb']}/{ci_type_api_name}"
+        return await self._make_request("GET", endpoint, data=input_data)
+        
+    async def get_configuration_item(self, ci_type_api_name: str, ci_id: str) -> Dict[str, Any]:
+        """Get specific CI details"""
+        endpoint = f"{Config.API_ENDPOINTS['cmdb']}/{ci_type_api_name}/{ci_id}"
+        return await self._make_request("GET", endpoint)
+        
+    async def create_configuration_item(
+        self,
+        ci_type_api_name: str,
+        ci_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Create a new CI for a specific CI type"""
+        if "name" not in ci_data:
+            raise ValueError("Required field 'name' is missing")
+        wrapper = {ci_type_api_name: ci_data}
+        endpoint = f"{Config.API_ENDPOINTS['cmdb']}/{ci_type_api_name}"
+        return await self._make_request("POST", endpoint, data=wrapper)
+        
+    async def update_configuration_item(
+        self,
+        ci_type_api_name: str,
+        ci_id: str,
+        update_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Update an existing CI"""
+        wrapper = {ci_type_api_name: update_data}
+        endpoint = f"{Config.API_ENDPOINTS['cmdb']}/{ci_type_api_name}/{ci_id}"
+        return await self._make_request("PUT", endpoint, data=wrapper)
+        
+    async def delete_configuration_item(
+        self,
+        ci_type_api_name: str,
+        ci_ids: List[str]
+    ) -> Dict[str, Any]:
+        """Delete one or more CIs"""
+        ids_param = ",".join(ci_ids)
+        endpoint = f"{Config.API_ENDPOINTS['cmdb']}/{ci_type_api_name}?ids={ids_param}"
+        return await self._make_request("DELETE", endpoint)
+
+    # ==================== SOLUTIONS (On-Premise only) ====================
+    
+    async def get_solutions(
+        self,
+        limit: int = 20,
+        search_criteria: Optional[List[Dict]] = None
+    ) -> Dict[str, Any]:
+        """Get list of solutions (On-Premise API)"""
+        input_data = {"list_info": {"row_count": min(limit, Config.MAX_LIMIT), "start_index": 1}}
+        if search_criteria:
+            input_data["list_info"]["search_criteria"] = search_criteria
+        return await self._make_request("GET", Config.API_ENDPOINTS["solutions"], data=input_data)
+        
+    async def get_solution(self, solution_id: str) -> Dict[str, Any]:
+        """Get specific solution details"""
+        return await self._make_request(
+            "GET",
+            f"{Config.API_ENDPOINTS['solutions']}/{solution_id}"
+        )
+
+    # ==================== SPACE MANAGEMENT (On-Premise only) ====================
+    
+    async def get_campuses(self, limit: int = 20) -> Dict[str, Any]:
+        """Get list of campuses (On-Premise API)"""
+        input_data = {"list_info": {"row_count": min(limit, Config.MAX_LIMIT), "start_index": 1}}
+        return await self._make_request("GET", Config.API_ENDPOINTS["campuses"], data=input_data)
+        
+    async def get_buildings(
+        self,
+        campus_id: Optional[str] = None,
+        limit: int = 20
+    ) -> Dict[str, Any]:
+        """Get list of buildings"""
+        input_data = {"list_info": {"row_count": min(limit, Config.MAX_LIMIT), "start_index": 1}}
+        if campus_id:
+            input_data["campus"] = {"id": campus_id}
+        return await self._make_request("GET", Config.API_ENDPOINTS["buildings"], data=input_data)
+        
+    async def get_floors(
+        self,
+        building_id: Optional[str] = None,
+        limit: int = 20
+    ) -> Dict[str, Any]:
+        """Get list of floors"""
+        input_data = {"list_info": {"row_count": min(limit, Config.MAX_LIMIT), "start_index": 1}}
+        if building_id:
+            input_data["building"] = {"id": building_id}
+        return await self._make_request("GET", Config.API_ENDPOINTS["floors"], data=input_data)
+        
+    async def get_rooms(
+        self,
+        floor_id: Optional[str] = None,
+        limit: int = 20
+    ) -> Dict[str, Any]:
+        """Get list of rooms"""
+        input_data = {"list_info": {"row_count": min(limit, Config.MAX_LIMIT), "start_index": 1}}
+        if floor_id:
+            input_data["floor"] = {"id": floor_id}
+        return await self._make_request("GET", Config.API_ENDPOINTS["rooms"], data=input_data)
