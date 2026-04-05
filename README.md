@@ -1,44 +1,45 @@
 # ServiceDesk Plus MCP Server
 
-MCP (Model Context Protocol) server để tích hợp với ServiceDesk Plus On-Premise với hỗ trợ đầy đủ CMDB.
+MCP (Model Context Protocol) server để tích hợp với ServiceDesk Plus Cloud API v3.
+
+**Reference:** https://www.manageengine.com/products/service-desk/sdpop-v3-api/
 
 ## 🎯 **Tính năng**
 
-### **Ticket Management**
-- ✅ Quản lý tickets (tạo, cập nhật, xem danh sách, xóa)
-- ✅ Tìm kiếm và lọc tickets
-- ✅ Quản lý comments và attachments
-- ✅ Workflow automation
+### **Request (Ticket) Management**
+- ✅ CRUD operations cho requests
+- ✅ Tìm kiếm và lọc với search_criteria
+- ✅ Quản lý notes và tasks
+- ✅ Assign, pickup, close requests
+- ✅ Draft và Archive management
 
-### **CMDB (Configuration Management Database)**
-- ✅ **Configuration Items (CIs)** - Quản lý servers, network devices, software
-- ✅ **Asset Management** - Quản lý hardware, software, locations
-- ✅ **Software License Management** - Tracking licenses, compliance
-- ✅ **Contract Management** - Vendor contracts, SLA tracking
-- ✅ **Purchase Order Management** - Procurement automation
-- ✅ **Vendor Management** - Vendor relationships, contacts
+### **User Management (Admin)**
+- ✅ CRUD operations cho users
+- ✅ Tìm kiếm users
 
-### **Admin Management**
-- ✅ **Site Management** - Quản lý sites, locations, branches
-- ✅ **User Group Management** - Quản lý groups, permissions, roles
-- ✅ **User & Technician Management** - CRUD operations, role assignment
-- ✅ **Permission Management** - Role-based permissions, access control
-- ✅ **Department Management** - Organizational structure
-- ✅ **Location Management** - Physical locations, rooms, floors
-- ✅ **System Settings** - Email, notifications, system configuration
+### **Change Management**
+- ✅ CRUD operations cho changes
+- ✅ Approve/Reject changes
+- ✅ Change tasks
 
-### **User Management**
-- ✅ Quản lý users và technicians
-- ✅ Role-based access control
-- ✅ User provisioning
+### **Project Management**
+- ✅ CRUD operations cho projects
+- ✅ Milestones management
+- ✅ Project members và tasks
 
-### **Advanced Features**
-- ✅ Authentication với ServiceDesk Plus API
-- ✅ Real-time data synchronization
+### **Release Management**
+- ✅ CRUD operations cho releases
+- ✅ Approve/Reject releases
+- ✅ Release notes, tasks, worklogs
+
+### **Task Management**
+- ✅ CRUD operations cho general tasks
+
+### **Authentication**
+- ✅ API Key authentication qua `authtoken` header
+- ✅ Async/await cho high performance
 - ✅ Comprehensive error handling
-- ✅ Async/await for high performance
 - ✅ Pagination và filtering
-- ✅ Search capabilities
 
 ## 📦 **Cài đặt**
 

@@ -18,87 +18,44 @@ class Config:
     SDP_PASSWORD = os.getenv("SDP_PASSWORD", "")
     SDP_API_KEY = os.getenv("SDP_API_KEY", "")
     
-    # API Endpoints
+    # API Endpoints (ServiceDesk Plus Cloud API v3)
+    # Reference: https://www.manageengine.com/products/service-desk/sdpop-v3-api/
     API_ENDPOINTS = {
-        # Ticket Management
-        "tickets": "/api/v3/tickets",
-        "users": "/api/v3/users",
-        "technicians": "/api/v3/technicians",
-        "categories": "/api/v3/categories",
-        "priorities": "/api/v3/priorities",
-        "statuses": "/api/v3/statuses",
+        # Request (Ticket) Management
+        "requests": "/api/v3/requests",
+        "request_notes": "/api/v3/requests/{request_id}/notes",
+        "request_tasks": "/api/v3/requests/{request_id}/tasks",
+        "request_filters": "/api/v3/list_view_filters/show_all",
         
-        # CMDB - Configuration Items
-        "configuration_items": "/api/v3/cmdb/ci",
-        "ci_types": "/api/v3/cmdb/ci_types",
-        "ci_relationships": "/api/v3/cmdb/ci_relationships",
+        # Draft & Archive
+        "drafts": "/api/v3/requests/draft",
+        "archive": "/api/v3/requests/archive",
         
-        # Asset Management
-        "assets": "/api/v3/assets",
-        "asset_types": "/api/v3/asset_types",
-        "asset_categories": "/api/v3/asset_categories",
-        "asset_locations": "/api/v3/asset_locations",
-        "asset_models": "/api/v3/asset_models",
-        "asset_vendors": "/api/v3/asset_vendors",
+        # User Management (Admin)
+        "users": "/api/v3/admin/user",
         
-        # Software License Management
-        "software_licenses": "/api/v3/software_licenses",
-        "software_products": "/api/v3/software_products",
-        "license_types": "/api/v3/license_types",
+        # Change Management
+        "changes": "/api/v3/changes",
+        "change_approvals": "/api/v3/changes/{change_id}/approvals",
+        "change_approval_levels": "/api/v3/changes/{change_id}/approval_levels",
+        "change_tasks": "/api/v3/changes/{change_id}/tasks",
         
-        # Contract Management
-        "contracts": "/api/v3/contracts",
-        "contract_types": "/api/v3/contract_types",
-        "contract_vendors": "/api/v3/contract_vendors",
+        # Project Management
+        "projects": "/api/v3/projects",
+        "milestones": "/api/v3/milestones",
+        "project_members": "/api/v3/projects/{project_id}/members",
+        "project_tasks": "/api/v3/projects/{project_id}/tasks",
         
-        # Purchase Order Management
-        "purchase_orders": "/api/v3/purchase_orders",
-        "po_statuses": "/api/v3/po_statuses",
+        # Release Management
+        "releases": "/api/v3/releases",
+        "release_approvals": "/api/v3/releases/{release_id}/approvals",
+        "release_approval_levels": "/api/v3/releases/{release_id}/approval_levels",
+        "release_notes": "/api/v3/releases/{release_id}/notes",
+        "release_tasks": "/api/v3/releases/{release_id}/tasks",
+        "release_worklogs": "/api/v3/releases/{release_id}/worklogs",
         
-        # Vendor Management
-        "vendors": "/api/v3/vendors",
-        "vendor_types": "/api/v3/vendor_types",
-        
-        # Admin Management - Sites
-        "sites": "/api/v3/admin/sites",
-        "site_types": "/api/v3/admin/site_types",
-        
-        # Admin Management - User Groups
-        "user_groups": "/api/v3/admin/user_groups",
-        "group_types": "/api/v3/admin/group_types",
-        "group_permissions": "/api/v3/admin/group_permissions",
-        
-        # Admin Management - Users & Technicians
-        "admin_users": "/api/v3/admin/users",
-        "admin_technicians": "/api/v3/admin/technicians",
-        "user_roles": "/api/v3/admin/user_roles",
-        "technician_roles": "/api/v3/admin/technician_roles",
-        
-        # Admin Management - Permissions
-        "permissions": "/api/v3/admin/permissions",
-        "role_permissions": "/api/v3/admin/role_permissions",
-        "user_permissions": "/api/v3/admin/user_permissions",
-        
-        # Admin Management - Departments
-        "departments": "/api/v3/admin/departments",
-        "department_types": "/api/v3/admin/department_types",
-        
-        # Admin Management - Locations
-        "locations": "/api/v3/admin/locations",
-        "location_types": "/api/v3/admin/location_types",
-        
-        # Admin Management - System Settings
-        "system_settings": "/api/v3/admin/system_settings",
-        "email_settings": "/api/v3/admin/email_settings",
-        "notification_settings": "/api/v3/admin/notification_settings",
-        
-        # Discovery
-        "discovery": "/api/v3/discovery",
-        "discovery_profiles": "/api/v3/discovery_profiles",
-        
-        # Reports
-        "reports": "/api/v3/reports",
-        "cmdb_reports": "/api/v3/cmdb/reports"
+        # Task Management
+        "tasks": "/api/v3/tasks"
     }
     
     # Ticket Statuses
@@ -227,13 +184,12 @@ class Config:
     
     @classmethod
     def get_auth_headers(cls) -> Dict[str, str]:
-        """Get authentication headers for API requests"""
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        }
+        """Get authentication headers for API requests (ServiceDesk Plus Cloud v3)
         
-        if cls.SDP_API_KEY:
-            headers["X-API-Key"] = cls.SDP_API_KEY
-        
-        return headers 
+        Note: Cloud API uses 'authtoken' header for authentication
+        Reference: https://www.manageengine.com/products/service-desk/sdpop-v3-api/
+        """
+        return {
+            "Accept": "application/vnd.manageengine.sdp.v3+json",
+            "Content-Type": "application/x-www-form-urlencoded"
+        } 
