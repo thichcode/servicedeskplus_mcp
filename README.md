@@ -1,145 +1,127 @@
 # ServiceDesk Plus MCP Server
 
-MCP (Model Context Protocol) server để tích hợp với ServiceDesk Plus API v3.
+MCP (Model Context Protocol) server dành cho **ManageEngine ServiceDesk Plus Cloud/On-Premise API v3** expose toàn bộ REST v3 dưới dạng các **Tool** chuẩn MCP. Dùng được ngay trên tất cả client MCP (VS Code, Cursor, Obsidian, CLI).
 
 ## API References
 
-| Version | Documentation | Authentication |
-|---------|--------------|----------------|
-| **Cloud** | [sdpop-v3-api](https://www.manageengine.com/products/service-desk/sdpop-v3-api/) | `authtoken` header |
-| **On-Premise** | [sdpod-v3-api](https://www.manageengine.com/products/service-desk/sdpod-v3-api/) | `Authorization: Zoho-oauthtoken` |
+| Version | Endpoint | Header/example |
+|---------|----------|----------------|
+| Cloud | [sdpop-v3-api](https://www.manageengine.com/products/service-desk/sdpop-v3-api/) | `authtoken` |
+| On-Premise | [sdpod-v3-api](https://www.manageengine.com/products/service-desk/sdpod-v3-api/) | `Zoho-oauthtoken` |
 
-## 🎯 **Tính năng**
+## Cách cài nhanh
 
-### **Request (Ticket) Management** (Cả 2 API)
-- ✅ CRUD operations cho requests
-- ✅ Notes, Tasks, Worklogs
-- ✅ Assign, pickup, close requests
-- ✅ Search và filtering
-
-### **User Management** (Cả 2 API)
-- ✅ CRUD operations cho users
-
-### **Change Management** (Cả 2 API)
-- ✅ CRUD operations cho changes
-- ✅ Approvals, Tasks
-
-### **Project Management** (Cả 2 API)
-- ✅ CRUD operations cho projects
-- ✅ Milestones, Members, Tasks
-
-### **Release Management** (Cả 2 API)
-- ✅ CRUD operations cho releases
-- ✅ Notes, Tasks
-
-### **Task Management** (Cả 2 API)
-- ✅ CRUD operations cho general tasks
-
-### **Problem Management** (Chỉ On-Premise)
-- ✅ CRUD operations cho problems
-- ✅ Notes, Tasks
-
-### **Asset Management** (Chỉ On-Premise)
-- ✅ CRUD operations cho assets
-
-### **CMDB Management** (Chỉ On-Premise)
-- ✅ CI Types, Configuration Items
-- ✅ CI Relationships
-
-### **Contract Management** (Chỉ On-Premise)
-- ✅ CRUD operations cho contracts
-
-### **Purchase Order Management** (Chỉ On-Premise)
-- ✅ CRUD operations cho purchase orders
-
-### **Solutions** (Chỉ On-Premise)
-- ✅ Get solutions, topics
-
-### **Space Management** (Chỉ On-Premise)
-- ✅ Campuses, Buildings, Floors, Rooms
-
-## 🚀 **Cài đặt**
-
-### 1. Clone repository
 ```bash
 git clone https://github.com/thichcode/servicedeskplus_mcp.git
 cd servicedeskplus_mcp
-```
-
-### 2. Cài đặt dependencies
-```bash
 pip install -r requirements.txt
 ```
 
-### 3. Cấu hình
-Copy `env.example` sang `.env` và điền thông tin:
-
+### Cấu hình
 ```bash
-# Cloud API
-SDP_BASE_URL=https://yourdomain.service-deskplus.com
-SDP_API_KEY=your_api_key_here
+cp env.example .env
+```
+`
+# Cloud API  (trailing path NOT needed)
+SDP_BASE_URL=https://yoursd.service-deskplus.com
+SDP_API_KEY=xxxxxxxxxxxxxxxx
 SDP_API_TYPE=cloud
 
-# Hoặc On-Premise API
-# SDP_BASE_URL=https://your-servicedesk.com:8443
-# SDP_API_KEY=your_oauth_token_here
+# Hoặc On-Premise
+# SDP_BASE_URL=https://your-sdp-host:8443
 # SDP_API_TYPE=onpremise
 ```
+Lấy token: Admin → Users → Generate API Key (Cloud); Admin → OAuth token (On-Prem).
 
-### 4. Chạy server
+---
+
+## Chạy MCP Server (stdio)
+
 ```bash
-python server.py
+python main.py
+```
+Output nhập chuẩn:
+```
+MCP server running on stdio://stdio
+Registered tools: list_tickets, get_ticket, create_ticket, update_ticket, delete_ticket, assign_request, escalate_request, ...
 ```
 
-## 📡 **API Authentication**
+Kết nối client (VS Code/Cursor/Obsidian) trỏ tới `stdout mcp`, tức là `python main.py`.
 
-### Cloud API
-```python
-headers = {
-    "authtoken": "your_api_key",
-    "Accept": "application/vnd.manageengine.sdp.v3+json"
-}
-```
+---
 
-### On-Premise API
-```python
-headers = {
-    "Authorization": "Zoho-oauthtoken your_oauth_token",
-    "Accept": "application/vnd.manageengine.sdp.v3+json"
-}
-```
-
-## 📚 **Ví dụ sử dụng**
+## Client Compatible Test
 
 ```python
-from sdp_client import ServiceDeskPlusClient
+import asyncio, mcp
 
-# Cloud API
-async with ServiceDeskPlusClient(api_type="cloud") as client:
-    # Get requests
-    requests = await client.get_requests(limit=10)
-    
-    # Create request
-    new_request = await client.create_request({
-        "subject": "Test Request",
-        "description": "Description here"
-    })
+async def main():
+    params = mcp.stdio.get_stdio_parameters("python3 [./main.py]")
+    async with mcp.ClientSession(params) as session:
+        tools = await session.list_tools()
+        print('Tools available:', len(tools))
+        res = await session.call_tool('list_tickets', {'limit': 5, 'status': 'open'})
+        print('Tickets:', res)
 
-# On-Premise API
-async with ServiceDeskPlusClient(api_type="onpremise") as client:
-    # Get assets (On-Premise only)
-    assets = await client.get_assets()
-    
-    # Get CMDB CIs (On-Premise only)
-    computers = await client.get_configuration_items("ci_computer")
+asyncio.run(main())
 ```
+Nếu in ra danh sách ticket (hoặc lỗi xác thực) → server hoạt động đúng.
 
-## 📋 **Yêu cầu**
+---
 
-- Python 3.8+
-- aiohttp
-- python-dotenv
+## Danh sách Tools tiêu biểu (hơn 40 tool)
 
-## 📄 **License**
+| Tool | Mô tả | Input |
+|------|-------|-------|
+| `list_tickets` | Lấy danh sách tickets | `limit`, `status`, `priority`, `requester` |
+| `get_ticket` | Chi tiết 1 ticket | `ticket_id` |
+| `create_ticket` | Tạo ticket mới | `subject`, `description`, `requester`, `priority`, `category`, `technician` |
+| `update_ticket` | Cập nhật ticket | `ticket_id`, `status`, `priority`, … |
+| `delete_ticket` | Xóa ticket | `ticket_id` |
+| `search_tickets` | Tìm kiếm theo từ khóa | `query`, `limit` |
+| `add_ticket_comment` | Thêm comment | `ticket_id`, `comment` |
+| `assign_request` | Gán request cho technician | `request_id`, `technician_id`, `group_id` |
+| `escalate_request` | Escalate request cấp trên | `request_id`, `escalation_level`, `reason` |
+| `approve_request` | Phê duyệt request | `request_id`, `approval_comments` |
+| `reject_request` | Bác bỏ request | `request_id`, `rejection_reason`, `comments` |
+| `close_request` | Đóng request | `request_id`, `closure_code`, `resolution` |
+| `list_users` | Danh sách users | `limit` |
+| `get_user` | Chi tiết user | `user_id` |
+| `list_sites` | Danh sách sites | `limit`, `site_type`, `status` |
+| `create_site` | Tạo site mới | `name`, `site_type`, `address`, `country`, ... |
+| `list_admin_users` | Danh sách admin users | `limit`, `role`, `status` |
+| `create_admin_user` | Tạo admin user | `username`, `email`, `first_name`, `last_name`, `role`, ... |
+| `get_request_history` | Lịch sử request | `request_id`, `limit` |
+| `get_request_sla_details` | Chi tiết SLA | `request_id` |
+| `get_permissions` | Lấy permissions | — |
+| `update_role_permissions` | Cập nhật permissions role | `role_id`, `permissions` |
 
-MIT License
+Toàn bộ schema tools nằm trong **main.py** hàm `handle_list_tools()`, tự Registration MCP.
+
+---
+
+## Tài liệu thêm
+- [main.py](main.py) — source MCP server
+- [USAGE.md](USAGE.md) (trong repo) — hướng dẫn MCP chi tiết
+- [sdp_client.py](sdp_client.py), [admin_client.py](admin_client.py), [config.py](config.py)
+
+---
+
+## Lỗi hay gặp & Debug
+- **401 Unauthorized** → Kiểm tra `SDP_API_KEY` (Cloud) hay `Authorization: Zoho-oauthtoken` (On-Prem).
+- **404 Not Found** → Kiểm tra `SDP_BASE_URL` không có đuôi `/` thừa.
+- **Không thấy tools** → Đảm bảo vận hành `python main.py` trước (xuất ra danh sách tools).
+- **TypeError / no module** → Cài `pip install mcp>=1.3.0 aiohttp python-dotenv`.
+
+---
+
+## Contributors
+- [@thichcode](https://github.com/thichcode)
+
+## License
+MIT
+
+[main]: main.py "Server MCP"
+[USAGE]: USAGE.md "Hướng dẫn dùng MCP"
+[sdp]: sdp_client.py "Client helper"
+[admin]: admin_client.py "Admin client"
