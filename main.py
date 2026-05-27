@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 
 from mcp.server import Server
-from mcp.server.models import InitializationOptions
+from mcp.server import InitializationOptions, NotificationOptions
 from mcp.server.stdio import stdio_server
 from mcp.types import (
     CallToolRequest,
@@ -3663,7 +3663,7 @@ async def main():
                 server_name="servicedesk-plus",
                 server_version="2.0.0",
                 capabilities=server.get_capabilities(
-                    notification_options=None,
+                    notification_options=NotificationOptions(tools_changed=False),
                     experimental_capabilities=None,
                 ),
             ),
