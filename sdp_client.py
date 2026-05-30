@@ -145,7 +145,8 @@ class ServiceDeskPlusClient:
         """Get headers for API v3 requests based on API type"""
         base_headers = {
             "Accept": "application/vnd.manageengine.sdp.v3+json",
-            "Content-Type": "application/x-www-form-urlencoded"
+            "Content-Type": "application/x-www-form-urlencoded",
+            "PORTALID": Config.SDP_PORTAL_ID
         }
         
         if self.api_type == "onpremise":
@@ -884,3 +885,474 @@ class ServiceDeskPlusClient:
         if floor_id:
             input_data["floor"] = {"id": floor_id}
         return await self._make_request("GET", Config.API_ENDPOINTS["rooms"], data=input_data)
+
+    # ==================== TICKET ALIASES (main.py compatibility) ====================
+
+    async def get_tickets(self, limit: int = 50, status: Optional[str] = None, priority: Optional[str] = None, requester: Optional[str] = None) -> Dict[str, Any]:
+        return await self.get_requests(limit=limit)
+
+    async def get_request_worklog(self, request_id: str, limit: int = 20) -> Dict[str, Any]:
+        return await self.get_request_worklogs(request_id)
+
+    async def get_ticket(self, ticket_id: str) -> Dict[str, Any]:
+        return await self.get_request(ticket_id)
+
+    async def create_ticket(self, ticket_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self.create_request(ticket_data)
+
+    async def update_ticket(self, ticket_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self.update_request(ticket_id, update_data)
+
+    async def delete_ticket(self, ticket_id: str) -> Dict[str, Any]:
+        return await self.delete_request(ticket_id)
+
+    async def search_tickets(self, query: str, limit: int = 20) -> Dict[str, Any]:
+        input_data = {"list_info": {"row_count": min(limit, Config.MAX_LIMIT), "start_index": 1, "search_criteria": [{"field": "subject", "condition": "contains", "value": query}]}}
+        return await self._make_request("GET", Config.API_ENDPOINTS["requests"], data=input_data)
+
+    async def get_technicians(self, limit: int = 20) -> Dict[str, Any]:
+        input_data = {"list_info": {"row_count": min(limit, Config.MAX_LIMIT), "start_index": 1}}
+        return await self._make_request("GET", Config.API_ENDPOINTS["technicians"], data=input_data)
+
+    # ==================== REQUEST COMMENTS ====================
+
+    async def add_ticket_comment(self, request_id: str, comment: str) -> Dict[str, Any]:
+        comment_data = {"comment": {"content": comment}}
+        return await self._make_request("POST", Config.API_ENDPOINTS["request_notes"].format(request_id=request_id), data=comment_data)
+
+    async def get_ticket_comments(self, request_id: str) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["request_notes"].format(request_id=request_id))
+
+    # ==================== REQUEST ADVANCED OPERATIONS ====================
+
+    async def reassign_request(self, request_id: str, technician_id: Optional[str] = None, reason: Optional[str] = None) -> Dict[str, Any]:
+        data: Dict[str, Any] = {}
+        if technician_id:
+            data["technician"] = {"id": technician_id}
+        if reason:
+            data["reason"] = reason
+        return await self._make_request("PUT", f"{Config.API_ENDPOINTS['requests']}/{request_id}/reassign", data={"request": data})
+
+    async def escalate_request(self, request_id: str, escalation_level: Optional[str] = None, reason: Optional[str] = None) -> Dict[str, Any]:
+        data: Dict[str, Any] = {}
+        if escalation_level:
+            data["escalation_level"] = escalation_level
+        if reason:
+            data["reason"] = reason
+        return await self._make_request("PUT", f"{Config.API_ENDPOINTS['requests']}/{request_id}/escalate", data={"request": data})
+
+    async def approve_request(self, request_id: str, approval_comments: Optional[str] = None) -> Dict[str, Any]:
+        data: Dict[str, Any] = {}
+        if approval_comments:
+            data["approval_comments"] = approval_comments
+        return await self._make_request("PUT", f"{Config.API_ENDPOINTS['requests']}/{request_id}/approve", data={"request": data})
+
+    async def reject_request(self, request_id: str, rejection_reason: Optional[str] = None, comments: Optional[str] = None) -> Dict[str, Any]:
+        data: Dict[str, Any] = {}
+        if rejection_reason:
+            data["rejection_reason"] = rejection_reason
+        if comments:
+            data["comments"] = comments
+        return await self._make_request("PUT", f"{Config.API_ENDPOINTS['requests']}/{request_id}/reject", data={"request": data})
+
+    async def get_request_approvals(self, request_id: str) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["request_approvals"].format(request_id=request_id))
+
+    async def get_request_attachments(self, request_id: str) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["request_attachments"].format(request_id=request_id))
+
+    async def add_request_attachment(self, request_id: str, file_path: str, description: Optional[str] = None) -> Dict[str, Any]:
+        return await self._make_request("POST", Config.API_ENDPOINTS["request_attachments"].format(request_id=request_id), data={"file": file_path, "description": description or ""})
+
+    async def delete_request_attachment(self, request_id: str, attachment_id: str) -> Dict[str, Any]:
+        return await self._make_request("DELETE", f"{Config.API_ENDPOINTS['request_attachments'].format(request_id=request_id)}/{attachment_id}")
+
+    async def get_request_history(self, request_id: str, limit: int = 50) -> Dict[str, Any]:
+        input_data = {"list_info": {"row_count": min(limit, Config.MAX_LIMIT), "start_index": 1}}
+        return await self._make_request("GET", Config.API_ENDPOINTS["request_history"].format(request_id=request_id), data=input_data)
+
+    async def get_request_sla_details(self, request_id: str) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["request_sla"].format(request_id=request_id))
+
+    async def update_request_sla(self, request_id: str, sla_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("PUT", Config.API_ENDPOINTS["request_sla"].format(request_id=request_id), data={"sla": sla_data})
+
+    async def get_request_templates(self, category: Optional[str] = None) -> Dict[str, Any]:
+        input_data: Dict[str, Any] = {"list_info": {"row_count": 50, "start_index": 1}}
+        if category:
+            input_data["category"] = {"name": category}
+        return await self._make_request("GET", Config.API_ENDPOINTS["request_templates"], data=input_data)
+
+    async def create_request_from_template(self, template_id: str, request_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("POST", f"{Config.API_ENDPOINTS['request_templates']}/{template_id}/requests", data={"request": request_data})
+
+    async def get_closure_codes(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["request_closure_codes"])
+
+    async def add_worklog_entry(self, request_id: str, description: str, time_spent: Optional[str] = None, technician_id: Optional[str] = None) -> Dict[str, Any]:
+        worklog = {"description": description}
+        if time_spent:
+            worklog["time_spent"] = time_spent
+        if technician_id:
+            worklog["technician"] = {"id": technician_id}
+        return await self._make_request("POST", Config.API_ENDPOINTS["request_worklogs"].format(request_id=request_id), data={"worklog": worklog})
+
+    async def update_worklog_entry(self, request_id: str, worklog_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("PUT", f"{Config.API_ENDPOINTS['request_worklogs'].format(request_id=request_id)}/{worklog_id}", data={"worklog": update_data})
+
+    async def get_request_custom_fields(self, request_id: str) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["request_custom_fields"].format(request_id=request_id))
+
+    async def update_request_custom_fields(self, request_id: str, custom_fields: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("PUT", Config.API_ENDPOINTS["request_custom_fields"].format(request_id=request_id), data={"custom_fields": custom_fields})
+
+    async def get_request_feedback(self, request_id: str) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["request_feedback"].format(request_id=request_id))
+
+    async def submit_request_feedback(self, request_id: str, rating: int, comments: Optional[str] = None, survey_responses: Optional[Dict] = None) -> Dict[str, Any]:
+        feedback: Dict[str, Any] = {"rating": rating}
+        if comments:
+            feedback["comments"] = comments
+        if survey_responses:
+            feedback["survey_responses"] = survey_responses
+        return await self._make_request("POST", Config.API_ENDPOINTS["request_feedback"].format(request_id=request_id), data={"feedback": feedback})
+
+    async def get_request_notifications(self, request_id: str) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["request_notifications"].format(request_id=request_id))
+
+    async def send_request_notification(self, request_id: str, notification_type: Optional[str] = None, recipients: Optional[str] = None, custom_message: Optional[str] = None) -> Dict[str, Any]:
+        data: Dict[str, Any] = {}
+        if notification_type:
+            data["notification_type"] = notification_type
+        if recipients:
+            data["recipients"] = recipients
+        if custom_message:
+            data["custom_message"] = custom_message
+        return await self._make_request("POST", Config.API_ENDPOINTS["request_notifications"].format(request_id=request_id), data={"notification": data})
+
+    # ==================== REFERENCE DATA ====================
+
+    async def get_categories(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["categories"])
+
+    async def get_priorities(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["priorities"])
+
+    async def get_statuses(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["statuses"])
+
+    # ==================== CMDB ====================
+
+    async def get_ci_relationships(self, ci_id: Optional[str] = None) -> Dict[str, Any]:
+        endpoint = Config.API_ENDPOINTS["cmdb"] + "/relationships"
+        if ci_id:
+            endpoint += f"?ci_id={ci_id}"
+        return await self._make_request("GET", endpoint)
+
+    # ==================== ASSET REFERENCE DATA ====================
+
+    async def get_asset_types(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["asset_types"])
+
+    async def get_asset_categories(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["asset_categories"])
+
+    async def get_asset_locations(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["asset_locations"])
+
+    async def get_asset_models(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["asset_models"])
+
+    async def get_asset_vendors(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["asset_vendors"])
+
+    # ==================== SOFTWARE LICENSE MANAGEMENT ====================
+
+    async def get_software_licenses(self, limit: int = 20, search_criteria: Optional[list] = None) -> Dict[str, Any]:
+        input_data: Dict[str, Any] = {"list_info": {"row_count": min(limit, Config.MAX_LIMIT), "start_index": 1}}
+        if search_criteria:
+            input_data["list_info"]["search_criteria"] = search_criteria
+        return await self._make_request("GET", Config.API_ENDPOINTS["software_licenses"], data=input_data)
+
+    async def get_software_license(self, license_id: str) -> Dict[str, Any]:
+        return await self._make_request("GET", f"{Config.API_ENDPOINTS['software_licenses']}/{license_id}")
+
+    async def create_software_license(self, license_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("POST", Config.API_ENDPOINTS["software_licenses"], data={"software_license": license_data})
+
+    async def update_software_license(self, license_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("PUT", f"{Config.API_ENDPOINTS['software_licenses']}/{license_id}", data={"software_license": update_data})
+
+    async def get_software_products(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["software_products"])
+
+    async def get_license_types(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["license_types"])
+
+    # ==================== CONTRACT REFERENCE DATA ====================
+
+    async def get_contract_types(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["contract_types"])
+
+    async def get_contract_vendors(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["contract_vendors"])
+
+    async def update_contract(self, contract_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("PUT", f"{Config.API_ENDPOINTS['contracts']}/{contract_id}", data={"contract": update_data})
+
+    # ==================== PURCHASE ORDER REFERENCE DATA ====================
+
+    async def update_purchase_order(self, po_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("PUT", f"{Config.API_ENDPOINTS['purchase_orders']}/{po_id}", data={"purchase_order": update_data})
+
+    async def get_po_statuses(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["po_statuses"])
+
+    # ==================== VENDOR MANAGEMENT ====================
+
+    async def get_vendors(self, limit: int = 20, vendor_type: Optional[str] = None, search_criteria: Optional[list] = None) -> Dict[str, Any]:
+        input_data: Dict[str, Any] = {"list_info": {"row_count": min(limit, Config.MAX_LIMIT), "start_index": 1}}
+        if search_criteria:
+            input_data["list_info"]["search_criteria"] = search_criteria
+        return await self._make_request("GET", Config.API_ENDPOINTS["vendors"], data=input_data)
+
+    async def get_vendor(self, vendor_id: str) -> Dict[str, Any]:
+        return await self._make_request("GET", f"{Config.API_ENDPOINTS['vendors']}/{vendor_id}")
+
+    async def create_vendor(self, vendor_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("POST", Config.API_ENDPOINTS["vendors"], data={"vendor": vendor_data})
+
+    async def update_vendor(self, vendor_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("PUT", f"{Config.API_ENDPOINTS['vendors']}/{vendor_id}", data={"vendor": update_data})
+
+    async def get_vendor_types(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["vendor_types"])
+
+    # ==================== ADMIN: SITES ====================
+
+    async def get_sites(self, limit: int = 20, site_type: Optional[str] = None, status: Optional[str] = None, search_criteria: Optional[list] = None) -> Dict[str, Any]:
+        input_data: Dict[str, Any] = {"list_info": {"row_count": min(limit, Config.MAX_LIMIT), "start_index": 1}}
+        if search_criteria:
+            input_data["list_info"]["search_criteria"] = search_criteria
+        return await self._make_request("GET", Config.API_ENDPOINTS["sites"], data=input_data)
+
+    async def get_site(self, site_id: str) -> Dict[str, Any]:
+        return await self._make_request("GET", f"{Config.API_ENDPOINTS['sites']}/{site_id}")
+
+    async def create_site(self, site_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("POST", Config.API_ENDPOINTS["sites"], data={"site": site_data})
+
+    async def update_site(self, site_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("PUT", f"{Config.API_ENDPOINTS['sites']}/{site_id}", data={"site": update_data})
+
+    async def delete_site(self, site_id: str) -> Dict[str, Any]:
+        return await self._make_request("DELETE", f"{Config.API_ENDPOINTS['sites']}/{site_id}")
+
+    async def get_site_types(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["site_types"])
+
+    # ==================== ADMIN: USER GROUPS ====================
+
+    async def get_user_groups(self, limit: int = 20, search_criteria: Optional[list] = None) -> Dict[str, Any]:
+        input_data: Dict[str, Any] = {"list_info": {"row_count": min(limit, Config.MAX_LIMIT), "start_index": 1}}
+        if search_criteria:
+            input_data["list_info"]["search_criteria"] = search_criteria
+        return await self._make_request("GET", Config.API_ENDPOINTS["user_groups"], data=input_data)
+
+    async def get_user_group(self, group_id: str) -> Dict[str, Any]:
+        return await self._make_request("GET", f"{Config.API_ENDPOINTS['user_groups']}/{group_id}")
+
+    async def create_user_group(self, group_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("POST", Config.API_ENDPOINTS["user_groups"], data={"group": group_data})
+
+    async def update_user_group(self, group_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("PUT", f"{Config.API_ENDPOINTS['user_groups']}/{group_id}", data={"group": update_data})
+
+    async def delete_user_group(self, group_id: str) -> Dict[str, Any]:
+        return await self._make_request("DELETE", f"{Config.API_ENDPOINTS['user_groups']}/{group_id}")
+
+    async def get_group_types(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["group_types"])
+
+    async def get_group_permissions(self, group_id: str) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["group_permissions"].format(group_id=group_id))
+
+    async def update_group_permissions(self, group_id: str, permissions: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("PUT", Config.API_ENDPOINTS["group_permissions"].format(group_id=group_id), data={"permissions": permissions})
+
+    # ==================== ADMIN: USERS ====================
+
+    async def get_admin_users(self, limit: int = 20, role: Optional[str] = None, status: Optional[str] = None, search_criteria: Optional[list] = None) -> Dict[str, Any]:
+        input_data: Dict[str, Any] = {"list_info": {"row_count": min(limit, Config.MAX_LIMIT), "start_index": 1}}
+        if search_criteria:
+            input_data["list_info"]["search_criteria"] = search_criteria
+        return await self._make_request("GET", Config.API_ENDPOINTS["admin_users"], data=input_data)
+
+    async def get_admin_user(self, user_id: str) -> Dict[str, Any]:
+        return await self._make_request("GET", f"{Config.API_ENDPOINTS['admin_users']}/{user_id}")
+
+    async def create_admin_user(self, user_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("POST", Config.API_ENDPOINTS["admin_users"], data={"user": user_data})
+
+    async def update_admin_user(self, user_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("PUT", f"{Config.API_ENDPOINTS['admin_users']}/{user_id}", data={"user": update_data})
+
+    async def delete_admin_user(self, user_id: str) -> Dict[str, Any]:
+        return await self._make_request("DELETE", f"{Config.API_ENDPOINTS['admin_users']}/{user_id}")
+
+    async def get_admin_user_groups(self, user_id: str) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["admin_user_groups"].format(user_id=user_id))
+
+    async def add_admin_user_to_group(self, user_id: str, group_id: str) -> Dict[str, Any]:
+        return await self._make_request("POST", Config.API_ENDPOINTS["admin_user_groups"].format(user_id=user_id), data={"group": {"id": group_id}})
+
+    async def remove_admin_user_from_group(self, user_id: str, group_id: str) -> Dict[str, Any]:
+        return await self._make_request("DELETE", f"{Config.API_ENDPOINTS['admin_user_groups'].format(user_id=user_id)}/{group_id}")
+
+    async def get_admin_user_login_history(self, user_id: str) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["admin_user_login_history"].format(user_id=user_id))
+
+    async def get_admin_user_activity_log(self, user_id: str) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["admin_user_activity_log"].format(user_id=user_id))
+
+    # ==================== ADMIN: TECHNICIANS ====================
+
+    async def get_admin_technicians(self, limit: int = 20, role: Optional[str] = None, status: Optional[str] = None, search_criteria: Optional[list] = None) -> Dict[str, Any]:
+        input_data: Dict[str, Any] = {"list_info": {"row_count": min(limit, Config.MAX_LIMIT), "start_index": 1}}
+        if search_criteria:
+            input_data["list_info"]["search_criteria"] = search_criteria
+        return await self._make_request("GET", Config.API_ENDPOINTS["admin_technicians"], data=input_data)
+
+    async def get_admin_technician(self, technician_id: str) -> Dict[str, Any]:
+        return await self._make_request("GET", f"{Config.API_ENDPOINTS['admin_technicians']}/{technician_id}")
+
+    async def create_admin_technician(self, tech_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("POST", Config.API_ENDPOINTS["admin_technicians"], data={"technician": tech_data})
+
+    async def update_admin_technician(self, technician_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("PUT", f"{Config.API_ENDPOINTS['admin_technicians']}/{technician_id}", data={"technician": update_data})
+
+    async def delete_admin_technician(self, technician_id: str) -> Dict[str, Any]:
+        return await self._make_request("DELETE", f"{Config.API_ENDPOINTS['admin_technicians']}/{technician_id}")
+
+    # ==================== ADMIN: USER/TECHNICIAN OPERATIONS ====================
+
+    async def get_user_roles(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["user_roles"])
+
+    async def get_technician_roles(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["technician_roles"])
+
+    async def convert_user_to_technician(self, user_id: str, role_id: Optional[str] = None) -> Dict[str, Any]:
+        data: Dict[str, Any] = {}
+        if role_id:
+            data["role"] = {"id": role_id}
+        return await self._make_request("PUT", f"{Config.API_ENDPOINTS['admin_users']}/{user_id}/convert_to_technician", data={"technician": data})
+
+    async def activate_admin_user(self, user_id: str) -> Dict[str, Any]:
+        return await self._make_request("PUT", f"{Config.API_ENDPOINTS['admin_users']}/{user_id}/activate")
+
+    async def deactivate_admin_user(self, user_id: str) -> Dict[str, Any]:
+        return await self._make_request("PUT", f"{Config.API_ENDPOINTS['admin_users']}/{user_id}/deactivate")
+
+    async def lock_admin_user(self, user_id: str) -> Dict[str, Any]:
+        return await self._make_request("PUT", f"{Config.API_ENDPOINTS['admin_users']}/{user_id}/lock")
+
+    async def unlock_admin_user(self, user_id: str) -> Dict[str, Any]:
+        return await self._make_request("PUT", f"{Config.API_ENDPOINTS['admin_users']}/{user_id}/unlock")
+
+    async def reset_admin_user_password(self, user_id: str) -> Dict[str, Any]:
+        return await self._make_request("PUT", f"{Config.API_ENDPOINTS['admin_users']}/{user_id}/reset_password")
+
+    async def update_admin_user_profile(self, user_id: str, profile_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("PUT", f"{Config.API_ENDPOINTS['admin_users']}/{user_id}/profile", data={"profile": profile_data})
+
+    async def search_admin_users(self, query: str, limit: int = 20) -> Dict[str, Any]:
+        input_data: Dict[str, Any] = {"list_info": {"row_count": min(limit, Config.MAX_LIMIT), "start_index": 1, "search_criteria": [{"field": "name", "condition": "contains", "value": query}]}}
+        return await self._make_request("GET", Config.API_ENDPOINTS["admin_users"], data=input_data)
+
+    async def bulk_create_admin_users(self, users_data: list) -> Dict[str, Any]:
+        return await self._make_request("POST", f"{Config.API_ENDPOINTS['admin_users']}/bulk", data={"users": users_data})
+
+    # ==================== ADMIN: PERMISSIONS ====================
+
+    async def get_permissions(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["permissions"])
+
+    async def get_role_permissions(self, role_id: str) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["role_permissions"].format(role_id=role_id))
+
+    async def update_role_permissions(self, role_id: str, permissions: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("PUT", Config.API_ENDPOINTS["role_permissions"].format(role_id=role_id), data={"permissions": permissions})
+
+    async def get_user_permissions(self, user_id: str) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["user_permissions"].format(user_id=user_id))
+
+    async def update_user_permissions(self, user_id: str, permissions: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("PUT", Config.API_ENDPOINTS["user_permissions"].format(user_id=user_id), data={"permissions": permissions})
+
+    # ==================== ADMIN: DEPARTMENTS ====================
+
+    async def get_departments(self, limit: int = 20, search_criteria: Optional[list] = None) -> Dict[str, Any]:
+        input_data: Dict[str, Any] = {"list_info": {"row_count": min(limit, Config.MAX_LIMIT), "start_index": 1}}
+        if search_criteria:
+            input_data["list_info"]["search_criteria"] = search_criteria
+        return await self._make_request("GET", Config.API_ENDPOINTS["departments"], data=input_data)
+
+    async def get_department(self, department_id: str) -> Dict[str, Any]:
+        return await self._make_request("GET", f"{Config.API_ENDPOINTS['departments']}/{department_id}")
+
+    async def create_department(self, dept_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("POST", Config.API_ENDPOINTS["departments"], data={"department": dept_data})
+
+    async def update_department(self, department_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("PUT", f"{Config.API_ENDPOINTS['departments']}/{department_id}", data={"department": update_data})
+
+    async def delete_department(self, department_id: str) -> Dict[str, Any]:
+        return await self._make_request("DELETE", f"{Config.API_ENDPOINTS['departments']}/{department_id}")
+
+    async def get_department_types(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["department_types"])
+
+    # ==================== ADMIN: LOCATIONS ====================
+
+    async def get_locations(self, limit: int = 20, search_criteria: Optional[list] = None) -> Dict[str, Any]:
+        input_data: Dict[str, Any] = {"list_info": {"row_count": min(limit, Config.MAX_LIMIT), "start_index": 1}}
+        if search_criteria:
+            input_data["list_info"]["search_criteria"] = search_criteria
+        return await self._make_request("GET", Config.API_ENDPOINTS["locations"], data=input_data)
+
+    async def get_location(self, location_id: str) -> Dict[str, Any]:
+        return await self._make_request("GET", f"{Config.API_ENDPOINTS['locations']}/{location_id}")
+
+    async def create_location(self, loc_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("POST", Config.API_ENDPOINTS["locations"], data={"location": loc_data})
+
+    async def update_location(self, location_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("PUT", f"{Config.API_ENDPOINTS['locations']}/{location_id}", data={"location": update_data})
+
+    async def delete_location(self, location_id: str) -> Dict[str, Any]:
+        return await self._make_request("DELETE", f"{Config.API_ENDPOINTS['locations']}/{location_id}")
+
+    async def get_location_types(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["location_types"])
+
+    # ==================== ADMIN: SYSTEM SETTINGS ====================
+
+    async def get_system_settings(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["system_settings"])
+
+    async def update_system_settings(self, settings: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("PUT", Config.API_ENDPOINTS["system_settings"], data={"settings": settings})
+
+    async def get_email_settings(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["email_settings"])
+
+    async def update_email_settings(self, settings: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("PUT", Config.API_ENDPOINTS["email_settings"], data={"settings": settings})
+
+    async def get_notification_settings(self) -> Dict[str, Any]:
+        return await self._make_request("GET", Config.API_ENDPOINTS["notification_settings"])
+
+    async def update_notification_settings(self, settings: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._make_request("PUT", Config.API_ENDPOINTS["notification_settings"], data={"settings": settings})
