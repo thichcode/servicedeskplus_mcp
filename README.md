@@ -1,13 +1,16 @@
 # ServiceDesk Plus MCP Server
 
-MCP (Model Context Protocol) server for **ManageEngine ServiceDesk Plus** — exposes the full REST API v3 as **141 MCP tools**. Works with both **Cloud** and **On-Premise** (v14.x+) instances.
+MCP (Model Context Protocol) server for **ManageEngine ServiceDesk Plus** — exposes the REST API v3 as **141 MCP tools**. Works with both **Cloud** and **On-Premise** (v14.x+) instances.
 
 ## Features
 
 - **141 tools** covering all SDP modules
 - **Dual auth**: Cloud (`authtoken` header) + On-Premise (session cookie + `Authtoken` header)
+- **PORTALID header** — required for On-Premise API v3
 - **stdio transport** — plug directly into VS Code, Cursor, Obsidian, Claude Desktop, or any MCP client
 - **Async** — built on `aiohttp` (Cloud) and `requests` (On-Premise session)
+
+> **Note:** Some admin operations (user-site assignment, group CRUD, department CRUD) are not available through the v3 API. See [API_ANALYSIS.md](API_ANALYSIS.md) for full details.
 
 ## Quick Start
 
