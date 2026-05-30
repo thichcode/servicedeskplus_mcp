@@ -8,7 +8,7 @@ import ssl
 from typing import Dict, Any
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 class Config:
@@ -30,6 +30,27 @@ class Config:
     # API Endpoints (ServiceDesk Plus API v3)
     API_ENDPOINTS = {
         "requests": "/api/v3/requests",
+        "request_filters": "/api/v3/request_filters",
+        "request_notes": "/api/v3/requests/{request_id}/notes",
+        "request_tasks": "/api/v3/requests/{request_id}/tasks",
+        "request_worklogs": "/api/v3/requests/{request_id}/worklogs",
+        "users": "/api/v3/users",
+        "changes": "/api/v3/changes",
+        "problems": "/api/v3/problems",
+        "projects": "/api/v3/projects",
+        "milestones": "/api/v3/milestones",
+        "releases": "/api/v3/releases",
+        "tasks": "/api/v3/tasks",
+        "assets": "/api/v3/assets",
+        "contracts": "/api/v3/contracts",
+        "purchase_orders": "/api/v3/purchase_orders",
+        "ci_types": "/api/v3/cmdb/ci_types",
+        "cmdb": "/api/v3/cmdb",
+        "solutions": "/api/v3/solutions",
+        "campuses": "/api/v3/campus",
+        "buildings": "/api/v3/building",
+        "floors": "/api/v3/floor",
+        "rooms": "/api/v3/room",
     }
 
     @classmethod

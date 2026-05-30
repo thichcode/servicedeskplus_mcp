@@ -7,6 +7,7 @@ Reference:
 
 import aiohttp
 import json
+import re
 from urllib.parse import urlencode
 from typing import Dict, Any, List, Optional
 from config import Config
@@ -16,17 +17,19 @@ class ServiceDeskPlusClient:
     """Client for interacting with ServiceDesk Plus API v3
     
     Supports both Cloud and On-Premise versions with appropriate authentication.
+    
+    Note for On-Premise (v14.7):
+    - Requires BOTH session cookie (via web login) AND Authtoken header
+    - Uses `Authtoken` header (capital A)
     """
     
     def __init__(self, api_type: str = "cloud"):
-        """Initialize the client
-        
-        Args:
-            api_type: "cloud" for Cloud API, "onpremise" for On-Premise API
-        """
         self.base_url = Config.SDP_BASE_URL.rstrip('/')
         self.api_key = Config.SDP_API_KEY
+        self.username = Config.SDP_USERNAME
+        self.password = Config.SDP_PASSWORD
         self.session: Optional[aiohttp.ClientSession] = None
+        self._http_session: Optional[requests.Session] = None
         self._auth_valid = False
         self.api_type = api_type
         
@@ -44,10 +47,6 @@ class ServiceDeskPlusClient:
             
     async def authenticate(self) -> bool:
         """Authenticate with ServiceDesk Plus"""
-        if not self.session:
-            timeout = aiohttp.ClientTimeout(total=Config.REQUEST_TIMEOUT)
-            self.session = aiohttp.ClientSession(timeout=timeout)
-            
         if self._auth_valid:
             return True
             
@@ -56,20 +55,90 @@ class ServiceDeskPlusClient:
             return False
             
         try:
-            async with self.session.get(
-                f"{self.base_url}{Config.API_ENDPOINTS['requests']}",
-                headers=self._get_headers(),
-                params={"input_data": "{}"}
-            ) as response:
-                if response.status in [200, 201]:
-                    self._auth_valid = True
-                    return True
-                else:
-                    print(f"Authentication failed: {response.status} - {await response.text()}")
-                    return False
+            if self.api_type == "onpremise":
+                return await self._authenticate_onpremise()
+            else:
+                return await self._authenticate_cloud()
                         
         except Exception as e:
             print(f"Authentication error: {e}")
+            return False
+    
+    async def _authenticate_cloud(self) -> bool:
+        """Authenticate with Cloud API"""
+        if not self.session:
+            timeout = aiohttp.ClientTimeout(total=Config.REQUEST_TIMEOUT)
+            self.session = aiohttp.ClientSession(timeout=timeout)
+            
+        async with self.session.get(
+            f"{self.base_url}{Config.API_ENDPOINTS['requests']}",
+            headers=self._get_headers(),
+            params={"input_data": "{}"}
+        ) as response:
+            if response.status in [200, 201]:
+                self._auth_valid = True
+                return True
+            else:
+                text = await response.text()
+                print(f"Authentication failed: {response.status} - {text}")
+                return False
+    
+    async def _authenticate_onpremise(self) -> bool:
+        """Authenticate with On-Premise API (requires session cookie + Authtoken)
+        
+        SDP On-Premise v14.7 requires BOTH:
+        1. A valid session cookie (via web login)
+        2. The Authtoken header
+        """
+        try:
+            import requests as req
+        except ImportError:
+            raise Exception("requests library required for On-Premise auth")
+        
+        self._http_session = req.Session()
+        self._http_session.verify = False
+        
+        # Step 1: Get login page for CSRF token
+        r = self._http_session.get(f"{self.base_url}/", timeout=Config.REQUEST_TIMEOUT)
+        csrf_match = re.search(r'name="sdplogincsrfparam" value="([^"]+)"', r.text)
+        if not csrf_match:
+            print("Could not find CSRF token")
+            return False
+        
+        csrf_val = csrf_match.group(1)
+        
+        # Step 2: Login with credentials
+        login_data = {
+            "j_username": self.username or "administrator",
+            "j_password": self.password or "",
+            "sdplogincsrfparam": csrf_val
+        }
+        r = self._http_session.post(
+            f"{self.base_url}/j_security_check",
+            data=login_data,
+            headers={"Accept": "application/json"},
+            timeout=Config.REQUEST_TIMEOUT
+        )
+        
+        if r.status_code != 200:
+            print(f"Login failed: {r.status_code}")
+            return False
+            
+        # Step 3: Verify API access with session + Authtoken
+        import urllib.parse
+        input_data = json.dumps({"list_info": {"start_index": 1, "row_count": 1}})
+        url = f"{self.base_url}{Config.API_ENDPOINTS['requests']}?input_data={urllib.parse.quote(input_data)}"
+        r = self._http_session.get(
+            url,
+            headers=self._get_headers(),
+            timeout=Config.REQUEST_TIMEOUT
+        )
+        
+        if r.status_code in [200, 201]:
+            self._auth_valid = True
+            return True
+        else:
+            print(f"On-Premise API auth failed: {r.status_code} - {r.text[:200]}")
             return False
     
     def _get_headers(self) -> Dict[str, str]:
@@ -80,18 +149,12 @@ class ServiceDeskPlusClient:
         }
         
         if self.api_type == "onpremise":
-            base_headers["Authorization"] = f"Zoho-oauthtoken {self.api_key}"
+            base_headers["Authtoken"] = self.api_key
         else:
             base_headers["authtoken"] = self.api_key
             
         return base_headers
-            
-    def _prepare_input_data(self, data: Optional[Dict[str, Any]] = None) -> str:
-        """Prepare input_data for API v3"""
-        if data is None:
-            return "{}"
-        return urlencode({"input_data": json.dumps(data)})
-            
+    
     async def _make_request(
         self, 
         method: str, 
@@ -102,30 +165,60 @@ class ServiceDeskPlusClient:
         """Make HTTP request to ServiceDesk Plus API v3"""
         if not await self.authenticate():
             raise Exception("Authentication failed")
-            
+        
         url = f"{self.base_url}{endpoint}"
+        headers = self._get_headers()
         
-        request_kwargs = {
-            "headers": self._get_headers(),
-        }
-        
-        if method in ["POST", "PUT"] and data:
-            request_kwargs["data"] = self._prepare_input_data(data)
-            
+        if self.api_type == "onpremise" and self._http_session:
+            return await self._make_onpremise_request(method, url, data, headers)
+        else:
+            return await self._make_aiohttp_request(method, url, data, headers)
+    
+    async def _make_onpremise_request(self, method, url, data, headers):
+        """Make request using requests.Session (for On-Premise with session cookies)"""
+        kw = {"headers": headers, "timeout": Config.REQUEST_TIMEOUT}
         try:
-            async with self.session.request(method, url, **request_kwargs) as response:
-                response_text = await response.text()
-                
+            if method == "GET":
+                if data:
+                    sep = "&" if "?" in url else "?"
+                    url += sep + urlencode({"input_data": json.dumps(data)})
+                r = self._http_session.get(url, **kw)
+            elif method == "POST":
+                kw["data"] = {"input_data": json.dumps(data)} if data else {}
+                r = self._http_session.post(url, **kw)
+            elif method == "PUT":
+                kw["data"] = {"input_data": json.dumps(data)} if data else {}
+                r = self._http_session.put(url, **kw)
+            elif method == "DELETE":
+                r = self._http_session.delete(url, **kw)
+            
+            if r.status_code in [200, 201]:
+                return r.json()
+            else:
+                raise Exception(f"API request failed: {r.status_code} - {r.text[:500]}")
+        except Exception as e:
+            if "API request failed" in str(e):
+                raise
+            raise Exception(f"Request failed: {e}")
+    
+    async def _make_aiohttp_request(self, method, url, data, headers):
+        """Make request using aiohttp (for Cloud API)"""
+        try:
+            async with self.session.request(
+                method, url,
+                headers=headers,
+                data=urlencode({"input_data": json.dumps(data)}).encode() if data else None,
+                timeout=aiohttp.ClientTimeout(total=Config.REQUEST_TIMEOUT)
+            ) as response:
+                text = await response.text()
                 if response.status in [200, 201]:
-                    try:
-                        return json.loads(response_text)
-                    except json.JSONDecodeError:
-                        return {"raw_response": response_text}
+                    return json.loads(text)
                 else:
-                    raise Exception(f"API request failed: {response.status} - {response_text}")
-                    
+                    raise Exception(f"API request failed: {response.status} - {text[:500]}")
         except aiohttp.ClientError as e:
             raise Exception(f"Request failed: {e}")
+            
+
 
     # ==================== REQUEST (TICKET) MANAGEMENT ====================
     
@@ -267,7 +360,7 @@ class ServiceDeskPlusClient:
         """Add a note to a request"""
         note_data = {
             "note": {
-                "text": text,
+                "description": text,
                 "show_to_requester": show_to_requester
             }
         }
