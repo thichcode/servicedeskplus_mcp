@@ -55,4 +55,8 @@ logs/
 
 # Temporary files
 *.tmp
-*.temp 
+*.temp
+
+# Debug/test scripts (not part of the server)
+debug_*.py
+count_tools.py

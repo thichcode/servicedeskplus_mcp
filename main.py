@@ -24,7 +24,7 @@ from sdp_client import ServiceDeskPlusClient
 from config import Config
 
 # Load environment variables
-load_dotenv()
+load_dotenv(override=True)
 
 # Create MCP server
 server = Server("servicedesk-plus")
