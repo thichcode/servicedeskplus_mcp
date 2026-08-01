@@ -2930,7 +2930,7 @@ async def handle_list_tools() -> ListToolsResult:
 async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> CallToolResult:
     """Handle tool calls"""
     try:
-        async with ServiceDeskPlusClient() as client:
+        async with ServiceDeskPlusClient(api_type=Config.SDP_API_TYPE) as client:
             # ==================== TICKET MANAGEMENT ====================
             if name == "list_tickets":
                 limit = arguments.get("limit", 50)

@@ -25,7 +25,7 @@ async def test_connection():
     print(f"📡 Kết nối đến: {Config.SDP_BASE_URL}")
     
     try:
-        async with ServiceDeskPlusClient() as client:
+        async with ServiceDeskPlusClient(api_type=Config.SDP_API_TYPE) as client:
             print("🔐 Đang xác thực...")
             
             # Test authentication
@@ -74,7 +74,7 @@ async def test_cmdb_features():
     print("\n🏗️ Kiểm tra các tính năng CMDB...")
     
     try:
-        async with ServiceDeskPlusClient() as client:
+        async with ServiceDeskPlusClient(api_type=Config.SDP_API_TYPE) as client:
             
             # Test Configuration Items
             print("  📦 Configuration Items:")
@@ -187,7 +187,7 @@ async def test_ticket_operations():
     print("\n🎫 Kiểm tra các thao tác với tickets...")
     
     try:
-        async with ServiceDeskPlusClient() as client:
+        async with ServiceDeskPlusClient(api_type=Config.SDP_API_TYPE) as client:
             # Test search tickets
             print("  - Tìm kiếm tickets...")
             search_result = await client.search_tickets("test", limit=5)
@@ -220,7 +220,7 @@ async def test_advanced_features():
     print("\n🚀 Kiểm tra các tính năng nâng cao...")
     
     try:
-        async with ServiceDeskPlusClient() as client:
+        async with ServiceDeskPlusClient(api_type=Config.SDP_API_TYPE) as client:
             # Test filtering capabilities
             print("  🔍 Filtering capabilities:")
             print("    - Lọc tickets theo status...")
@@ -255,7 +255,7 @@ async def test_admin_features():
     print("\n👨‍💼 Kiểm tra các tính năng Admin Management...")
     
     try:
-        async with ServiceDeskPlusClient() as client:
+        async with ServiceDeskPlusClient(api_type=Config.SDP_API_TYPE) as client:
             
             # Test Site Management
             print("  🏢 Site Management:")
@@ -393,7 +393,7 @@ async def test_admin_crud_operations():
     print("\n🔄 Kiểm tra các thao tác CRUD Admin...")
     
     try:
-        async with ServiceDeskPlusClient() as client:
+        async with ServiceDeskPlusClient(api_type=Config.SDP_API_TYPE) as client:
             
             # Test Site CRUD operations
             print("  🏢 Site CRUD Operations:")
